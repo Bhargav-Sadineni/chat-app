@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import cloudinary from "../lib/cloudinary.js";
 import { io, userSocketMap } from "../server.js";
 
-// Get all users except the logged in user
+// Get all users except the logged in user abc
 export const getUsersForSidebar = async (req, res)=>{
     try {
         const userId = req.user._id;
