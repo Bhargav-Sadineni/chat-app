@@ -4,6 +4,7 @@ import { ChatContext } from '../../context/ChatContext'
 import ImageViewerModal from './ImageViewerModal'
 import ConfirmModal from './ConfirmModal'
 import AddMembersModal from './AddMembersModal'
+import CallHistoryList from './CallHistoryList'
 
 const GroupInfoSidebar = () => {
 
@@ -76,6 +77,13 @@ const GroupInfoSidebar = () => {
                         <p className='text-gray-400 col-span-2'>No media shared yet.</p>
                     )}
                 </div>
+            </div>
+
+            <hr className='border-[#ffffff50] my-4' />
+
+            <div className="px-5 text-xs">
+                <p className='mb-2'>Recent calls</p>
+                <CallHistoryList groupId={selectedGroup._id} />
             </div>
 
             <hr className='border-[#ffffff50] my-4' />

@@ -67,6 +67,7 @@ import React, { useContext, useState } from 'react'
 import assets from '../assets/assets'
 import { ChatContext } from '../../context/ChatContext'
 import ImageViewerModal from './ImageViewerModal'
+import CallHistoryList from './CallHistoryList'
 
 const RightSidebar = () => {
 
@@ -125,6 +126,13 @@ const RightSidebar = () => {
                         <p className='text-gray-400 col-span-2'>No media shared yet.</p>
                     )}
                 </div>
+            </div>
+
+            <hr className='border-[#ffffff50] my-4' />
+
+            <div className="px-5 text-xs pb-6">
+                <p className='mb-2'>Recent calls</p>
+                <CallHistoryList userId={selectedUser._id} />
             </div>
 
             {viewerImage && (

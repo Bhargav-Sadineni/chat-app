@@ -130,6 +130,7 @@ import assets from '../assets/assets'
 import { formatMessageTime } from '../lib/utils'
 import { ChatContext } from '../../context/ChatContext'
 import { AuthContext } from '../../context/Authcontext'
+import { CallContext } from '../../context/CallContext'
 import AIAssistPanel from './AIAssistPanel'
 
 const ChatContainer = () => {
@@ -154,6 +155,7 @@ const ChatContainer = () => {
         sendAIMessage,
     } = useContext(ChatContext)
     const { authUser, onlineUsers } = useContext(AuthContext)
+    const { callState, startCall } = useContext(CallContext)
 
     const [text, setText] = useState("")
     const [imagePreview, setImagePreview] = useState(null)
@@ -168,6 +170,7 @@ const ChatContainer = () => {
     const activeMessages = isAI ? aiMessages : (isGroup ? groupMessages : messages)
     const headerName = isAI ? "AI" : (isGroup ? selectedGroup?.name : selectedUser?.fullName)
     const headerImage = isGroup ? assets.avatar_icon : (selectedUser?.profilePic || assets.avatar_icon)
+    const canCall = callState === 'idle'
 
     useEffect(() => {
         if (selectedUser) getMessages(selectedUser._id)
@@ -227,6 +230,15 @@ const ChatContainer = () => {
         setSelectedAI(false)
     }
 
+    const handleCall = (type) => {
+        if (!canCall) return
+        if (isGroup) {
+            startCall(type, { groupId: selectedGroup._id, groupName: selectedGroup.name })
+        } else {
+            startCall(type, { userId: selectedUser._id, targetName: selectedUser.fullName })
+        }
+    }
+
     if (!selectedUser && !selectedGroup && !selectedAI) {
         return (
             <div className='flex flex-col items-center justify-center gap-2 text-gray-500 bg-white/10 max-md:hidden'>
@@ -261,29 +273,54 @@ const ChatContainer = () => {
                 </p>
 
                 {!isAI && (
-                    <div className='relative'>
+                    <>
                         <button
-                            onClick={() => setShowAIPanel((prev) => !prev)}
-                            title="Ask AI"
-                            className='w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white'
+                            onClick={() => handleCall('audio')}
+                            disabled={!canCall}
+                            title="Audio call"
+                            className='w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white disabled:opacity-30'
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <rect x="3" y="8" width="18" height="12" rx="2" />
-                                <circle cx="8.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
-                                <circle cx="15.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
-                                <path d="M12 8V4" />
-                                <circle cx="12" cy="3" r="1" fill="currentColor" stroke="none" />
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
                             </svg>
                         </button>
 
-                        {showAIPanel && (
-                            <AIAssistPanel
-                                userId={!isGroup ? selectedUser?._id : undefined}
-                                groupId={isGroup ? selectedGroup?._id : undefined}
-                                onClose={() => setShowAIPanel(false)}
-                            />
-                        )}
-                    </div>
+                        <button
+                            onClick={() => handleCall('video')}
+                            disabled={!canCall}
+                            title="Video call"
+                            className='w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white disabled:opacity-30'
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M23 7l-7 5 7 5V7z" />
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                            </svg>
+                        </button>
+
+                        <div className='relative'>
+                            <button
+                                onClick={() => setShowAIPanel((prev) => !prev)}
+                                title="Ask AI"
+                                className='w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-white'
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="8" width="18" height="12" rx="2" />
+                                    <circle cx="8.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
+                                    <circle cx="15.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
+                                    <path d="M12 8V4" />
+                                    <circle cx="12" cy="3" r="1" fill="currentColor" stroke="none" />
+                                </svg>
+                            </button>
+
+                            {showAIPanel && (
+                                <AIAssistPanel
+                                    userId={!isGroup ? selectedUser?._id : undefined}
+                                    groupId={isGroup ? selectedGroup?._id : undefined}
+                                    onClose={() => setShowAIPanel(false)}
+                                />
+                            )}
+                        </div>
+                    </>
                 )}
 
                 <img src={assets.help_icon} alt="" className='max-md:hidden max-w-5' />
