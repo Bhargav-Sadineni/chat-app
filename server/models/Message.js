@@ -9,7 +9,10 @@ const messageSchema = new mongoose.Schema({
     receiverId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: true,
+    },
+    groupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Group",
     },
     text: {
         type: String,
@@ -21,6 +24,11 @@ const messageSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    // Tracks which group members have seen this message (group chats only)
+    seenBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    }],
 }, { timestamps: true });
 
 const Message = mongoose.model("Message", messageSchema);

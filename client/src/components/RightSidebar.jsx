@@ -63,32 +63,42 @@
 // export default RightSidebar
 
 
-import React, { useContext } from 'react'
+import React, { useContext, useState } from 'react'
 import assets from '../assets/assets'
 import { ChatContext } from '../../context/ChatContext'
-import { AuthContext } from '../../context/Authcontext'
+import ImageViewerModal from './ImageViewerModal'
 
 const RightSidebar = () => {
 
     const { selectedUser, showUserInfo, setShowUserInfo, messages } = useContext(ChatContext)
-    const { logout } = useContext(AuthContext)
+    const [viewerImage, setViewerImage] = useState(null)
 
     if (!selectedUser || !showUserInfo) return null
 
     const mediaMessages = messages.filter((msg) => msg.image)
 
     return (
-        <div className='bg-[#8185B2]/10 text-white w-full h-full relative overflow-y-scroll fixed md:static inset-0 z-30 md:z-auto'>
-            <div className='flex items-center gap-2 p-4 md:hidden'>
-                <img onClick={() => setShowUserInfo(false)} src={assets.arrow_icon} alt="" className='w-5 cursor-pointer' />
-                <p className='text-sm'>Profile</p>
+        <div className='bg-[#1a1533] md:bg-[#8185B2]/10 text-white w-full h-full
+        fixed md:relative top-0 left-0 right-0 bottom-0 md:inset-auto
+        z-50 md:z-auto overflow-y-auto'>
+
+            <div className='flex items-center justify-between py-3 mx-4 border-b border-stone-500'>
+                <p className='text-sm text-gray-300'>Contact info</p>
+                <button
+                    onClick={() => setShowUserInfo(false)}
+                    aria-label="Close profile"
+                    className='w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-2xl leading-none'
+                >
+                    &times;
+                </button>
             </div>
 
-            <div className='pt-6 md:pt-16 flex flex-col items-center gap-2 text-xs font-light mx-auto'>
+            <div className='pt-8 flex flex-col items-center gap-2 text-xs font-light mx-auto'>
                 <img
                     src={selectedUser?.profilePic || assets.avatar_icon}
                     alt=""
-                    className='w-20 aspect-[1/1] rounded-full'
+                    onClick={() => setViewerImage(selectedUser?.profilePic || assets.avatar_icon)}
+                    className='w-20 aspect-[1/1] rounded-full cursor-pointer'
                 />
                 <h1 className='px-10 text-xl font-medium mx-auto flex items-center gap-2'>
                     <p className='w-2 h-2 rounded-full bg-green-500'></p>
@@ -105,7 +115,7 @@ const RightSidebar = () => {
                     {mediaMessages.map((msg) => (
                         <div
                             key={msg._id}
-                            onClick={() => window.open(msg.image)}
+                            onClick={() => setViewerImage(msg.image)}
                             className='cursor-pointer rounded'
                         >
                             <img src={msg.image} alt="" className='h-full rounded-md' />
@@ -117,11 +127,9 @@ const RightSidebar = () => {
                 </div>
             </div>
 
-            <button onClick={() => logout()}
-                className='absolute bottom-5 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-400 to-violet-600 text-white border-none text-sm font-light py-2 px-20 rounded-full cursor-pointer'>
-                Logout
-            </button>
-
+            {viewerImage && (
+                <ImageViewerModal src={viewerImage} onClose={() => setViewerImage(null)} />
+            )}
         </div>
     )
 }
