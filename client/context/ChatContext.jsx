@@ -131,7 +131,8 @@ export const ChatProvider = ({ children }) => {
     const [unseenMessages, setUnseenMessages] = useState({});
     const [unseenGroupMessages, setUnseenGroupMessages] = useState({});
     const [showUserInfo, setShowUserInfo] = useState(false);
-    const [sidebarView, setSidebarView] = useState('all'); // 'all' | 'groups'
+    const [sidebarView, setSidebarView] = useState('all'); // 'all' | 'groups' | 'calls'
+    const [replyingTo, setReplyingTo] = useState(null);
 
     const { socket, axios } = useContext(AuthContext);
 
@@ -139,12 +140,14 @@ export const ChatProvider = ({ children }) => {
         setSelectedGroupState(null);
         setSelectedAIState(false);
         setSelectedUserState(user);
+        setReplyingTo(null);
     };
 
     const setSelectedGroup = (group) => {
         setSelectedUserState(null);
         setSelectedAIState(false);
         setSelectedGroupState(group);
+        setReplyingTo(null);
 
         if (group) {
             setUnseenGroupMessages((prev) => ({ ...prev, [group._id]: 0 }));
@@ -203,6 +206,7 @@ export const ChatProvider = ({ children }) => {
             );
             if (data.success) {
                 setMessages((prev) => [...prev, data.newMessage]);
+                setReplyingTo(null);
             } else {
                 toast.error(data.message);
             }
@@ -230,6 +234,7 @@ export const ChatProvider = ({ children }) => {
             );
             if (data.success) {
                 setGroupMessages((prev) => [...prev, data.newMessage]);
+                setReplyingTo(null);
             } else {
                 toast.error(data.message);
             }
@@ -238,7 +243,49 @@ export const ChatProvider = ({ children }) => {
         }
     };
 
-    // Send a message in the AI chat (the "AI" entry in the sidebar / rail)
+    // Forward an existing message's content to one or more other chats
+    // (1:1 users and/or groups), independent of the currently open chat.
+    const forwardMessage = async (message, targets) => {
+        try {
+            const payload = {};
+            if (message.text) payload.text = message.text;
+            if (message.image) payload.image = message.image;
+            if (message.fileUrl) {
+                payload.file = message.fileUrl;
+                payload.fileName = message.fileName;
+                payload.fileType = message.fileType;
+            }
+
+            await Promise.all(
+                targets.map((target) => {
+                    const url = target.type === 'group'
+                        ? `/api/messages/send-group/${target.id}`
+                        : `/api/messages/send/${target.id}`;
+                    return axios.post(url, payload);
+                })
+            );
+
+            toast.success("Message forwarded");
+            return true;
+        } catch (error) {
+            toast.error(error.message);
+            return false;
+        }
+    };
+
+    // Add / change / remove the logged-in user's reaction to a message
+    const reactToMessage = async (messageId, emoji) => {
+        try {
+            const { data } = await axios.put(`/api/messages/react/${messageId}`, { emoji });
+            if (data.success) {
+                setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions: data.reactions } : m)));
+                setGroupMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions: data.reactions } : m)));
+            }
+        } catch (error) {
+            toast.error(error.message);
+        }
+    };
+
     const sendAIMessage = async (text) => {
         const userTurn = { role: "user", text };
         setAiMessages((prev) => [...prev, userTurn]);
@@ -265,7 +312,6 @@ export const ChatProvider = ({ children }) => {
         }
     };
 
-    // Ask AI a question grounded in the current 1:1 or group conversation
     const askAIAbout = async (question, { userId, groupId } = {}) => {
         try {
             const { data } = await axios.post("/api/ai/chat", {
@@ -285,7 +331,6 @@ export const ChatProvider = ({ children }) => {
         }
     };
 
-    // Summarize the recent conversation with a user or group
     const summarizeConversation = async ({ userId, groupId }) => {
         try {
             const { data } = await axios.post("/api/ai/summarize", { userId, groupId }, { timeout: 50000 });
@@ -400,12 +445,18 @@ export const ChatProvider = ({ children }) => {
                 });
             }
         });
+
+        socket.on("messageReaction", ({ messageId, reactions }) => {
+            setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions } : m)));
+            setGroupMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions } : m)));
+        });
     };
 
     const unsubscribeFromMessages = () => {
         if (socket) {
             socket.off("newMessage");
             socket.off("newGroupMessage");
+            socket.off("messageReaction");
         }
     };
 
@@ -445,12 +496,16 @@ export const ChatProvider = ({ children }) => {
         totalUnseen,
         sidebarView,
         setSidebarView,
+        replyingTo,
+        setReplyingTo,
         getUsers,
         getGroups,
         getMessages,
         sendMessage,
         getGroupMessages,
         sendGroupMessage,
+        forwardMessage,
+        reactToMessage,
         sendAIMessage,
         askAIAbout,
         summarizeConversation,

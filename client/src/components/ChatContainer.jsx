@@ -127,13 +127,15 @@
 
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import assets from '../assets/assets'
-import { formatMessageTime } from '../lib/utils'
 import { ChatContext } from '../../context/ChatContext'
 import { AuthContext } from '../../context/Authcontext'
 import { CallContext } from '../../context/CallContext'
 import AIAssistPanel from './AIAssistPanel'
 import EmojiPicker from './EmojiPicker'
 import ImageViewerModal from './ImageViewerModal'
+import MessageBubble from './MessageBubble'
+import ReplyPreviewBar from './ReplyPreviewBar'
+import ForwardModal from './ForwardModal'
 
 const ChatContainer = () => {
 
@@ -150,6 +152,9 @@ const ChatContainer = () => {
         setSelectedAI,
         showUserInfo,
         setShowUserInfo,
+        replyingTo,
+        setReplyingTo,
+        reactToMessage,
         getMessages,
         sendMessage,
         getGroupMessages,
@@ -161,12 +166,13 @@ const ChatContainer = () => {
 
     const [text, setText] = useState("")
     const [imagePreview, setImagePreview] = useState(null)
-    const [filePreview, setFilePreview] = useState(null) // { dataUrl, name, type }
+    const [filePreview, setFilePreview] = useState(null)
     const [sending, setSending] = useState(false)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [showAIPanel, setShowAIPanel] = useState(false)
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const [viewerImage, setViewerImage] = useState(null)
+    const [forwardTarget, setForwardTarget] = useState(null)
     const scrollEnd = useRef()
     const fileInputRef = useRef()
     const attachInputRef = useRef()
@@ -194,6 +200,11 @@ const ChatContainer = () => {
         }
     }, [activeMessages])
 
+    const getRepliedMessage = (replyToId) => {
+        if (!replyToId) return null
+        return activeMessages.find((m) => m._id === replyToId) || null
+    }
+
     const handleSend = async (e) => {
         e.preventDefault()
 
@@ -216,6 +227,7 @@ const ChatContainer = () => {
             payload.fileName = filePreview.name
             payload.fileType = filePreview.type
         }
+        if (replyingTo) payload.replyTo = replyingTo._id
 
         if (isGroup) {
             await sendGroupMessage(payload)
@@ -381,7 +393,7 @@ const ChatContainer = () => {
             </div>
 
             {/*--------chat area--------*/}
-            <div className='flex flex-col h-[calc(100%-120px)] overflow-y-scroll p-3 pb-6'>
+            <div className='flex flex-col h-[calc(100%-120px)] overflow-y-scroll p-3 pb-6 gap-3'>
                 {isAI && activeMessages.length === 0 && (
                     <p className='text-center text-gray-500 text-sm mt-6'>Ask me anything about your chats, or anything at all.</p>
                 )}
@@ -391,7 +403,7 @@ const ChatContainer = () => {
 
                 {isAI ? (
                     activeMessages.map((msg, index) => (
-                        <div key={index} className={`flex mb-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <p className={`p-3 max-w-[75%] sm:max-w-[420px] text-sm rounded-lg break-words whitespace-pre-wrap
                                 ${msg.role === 'user' ? 'bg-violet-500/30 text-white rounded-br-none' : 'bg-white/10 text-white rounded-bl-none'}`}>
                                 {msg.text}
@@ -400,47 +412,22 @@ const ChatContainer = () => {
                     ))
                 ) : (
                     activeMessages.map((msg, index) => (
-                        <div
+                        <MessageBubble
                             key={msg._id || index}
-                            className={`flex flex-col items-end gap-1 ${msg.senderId !== authUser._id && 'items-start'}`}
-                        >
-                            <div className={`flex items-end gap-2 justify-end ${msg.senderId !== authUser._id && 'flex-row-reverse'}`}>
-                                <div className={`flex flex-col gap-1 max-w-[75%] sm:max-w-[420px] ${msg.senderId === authUser._id ? 'items-end' : 'items-start'}`}>
-                                    {msg.image && (
-                                        <img
-                                            src={msg.image}
-                                            alt=""
-                                            onClick={() => setViewerImage(msg.image)}
-                                            className='max-w-[280px] border border-gray-700 rounded-lg overflow-hidden cursor-pointer'
-                                        />
-                                    )}
-                                    {msg.fileUrl && (
-                                        <a
-                                            href={msg.fileUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className='flex items-center gap-2 p-2 rounded-lg bg-white/10 text-white text-xs max-w-[220px]'
-                                        >
-                                            <span className='text-lg'>📄</span>
-                                            <span className='truncate'>{msg.fileName || "File"}</span>
-                                        </a>
-                                    )}
-                                    {msg.text && (
-                                        <p className={`p-3 max-w-full md:text-sm font-light rounded-lg break-words whitespace-pre-wrap bg-violet-500/30 text-white
-                                          ${msg.senderId === authUser._id ? 'rounded-br-none' : 'rounded-bl-none'}`}>{msg.text}</p>
-                                    )}
-                                </div>
-                                <div className='text-center text-xs'>
-                                    <img src={msg.senderId === authUser._id ? (authUser.profilePic || assets.avatar_icon) : assets.avatar_icon} alt="" className='w-7 rounded-full' />
-                                    <p className='text-gray-500'>{formatMessageTime(msg.createdAt)}</p>
-                                </div>
-                            </div>
-                        </div>
+                            message={msg}
+                            isOwn={msg.senderId === authUser._id}
+                            currentUserId={authUser._id}
+                            avatarSrc={msg.senderId === authUser._id ? (authUser.profilePic || assets.avatar_icon) : assets.avatar_icon}
+                            repliedMessage={getRepliedMessage(msg.replyTo)}
+                            onReply={(m) => setReplyingTo(m)}
+                            onForward={(m) => setForwardTarget(m)}
+                            onReact={(id, emoji) => reactToMessage(id, emoji)}
+                        />
                     ))
                 )}
 
                 {isAI && aiLoading && (
-                    <p className='text-xs text-gray-400 mb-2'>AI is typing...</p>
+                    <p className='text-xs text-gray-400'>AI is typing...</p>
                 )}
 
                 <div ref={scrollEnd}></div>
@@ -448,6 +435,8 @@ const ChatContainer = () => {
 
             {/*-----bottom area---- */}
             <form onSubmit={handleSend} className='absolute bottom-0 left-0 right-0 flex flex-col gap-2 p-3'>
+
+                {!isAI && <ReplyPreviewBar message={replyingTo} onCancel={() => setReplyingTo(null)} />}
 
                 {!isAI && imagePreview && (
                     <div className='flex items-center gap-3 bg-gray-100/10 rounded-lg p-2 mx-1'>
@@ -540,6 +529,10 @@ const ChatContainer = () => {
 
             {viewerImage && (
                 <ImageViewerModal src={viewerImage} onClose={() => setViewerImage(null)} />
+            )}
+
+            {forwardTarget && (
+                <ForwardModal message={forwardTarget} onClose={() => setForwardTarget(null)} />
             )}
         </div>
     )

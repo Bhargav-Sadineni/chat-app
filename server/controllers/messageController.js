@@ -4,6 +4,10 @@ import cloudinary from "../lib/cloudinary.js";
 import { io, userSocketMap } from "../server.js";
 import Group from "../models/Group.js";
 
+// Treats anything starting with http as an already-hosted URL (forwarded
+// content) instead of fresh base64 data that needs uploading.
+const isRemoteUrl = (str) => typeof str === "string" && str.startsWith("http");
+
 // Get all users except the logged in user
 export const getUsersForSidebar = async (req, res)=>{
     try {
@@ -72,21 +76,19 @@ export const markMessageAsSeen = async (req, res)=>{
 // Send message to selected user
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image, file, fileName, fileType } = req.body;
+        const { text, image, file, fileName, fileType, replyTo } = req.body;
 
         const receiverId = req.params.id;
         const senderId = req.user._id;
 
         let imageUrl;
         if (image) {
-            const uploadResponse = await cloudinary.uploader.upload(image);
-            imageUrl = uploadResponse.secure_url;
+            imageUrl = isRemoteUrl(image) ? image : (await cloudinary.uploader.upload(image)).secure_url;
         }
 
         let fileUrl;
         if (file) {
-            const uploadResponse = await cloudinary.uploader.upload(file, { resource_type: "auto" });
-            fileUrl = uploadResponse.secure_url;
+            fileUrl = isRemoteUrl(file) ? file : (await cloudinary.uploader.upload(file, { resource_type: "auto" })).secure_url;
         }
 
         const newMessage = await Message.create({
@@ -97,6 +99,7 @@ export const sendMessage = async (req, res) => {
             fileUrl,
             fileName: fileUrl ? fileName : undefined,
             fileType: fileUrl ? fileType : undefined,
+            replyTo: replyTo || undefined,
         });
 
         const receiverSocketId = userSocketMap[receiverId];
@@ -130,7 +133,7 @@ export const getGroupMessages = async (req, res) => {
 // Send a message to a group
 export const sendGroupMessage = async (req, res) => {
     try {
-        const { text, image, file, fileName, fileType } = req.body;
+        const { text, image, file, fileName, fileType, replyTo } = req.body;
         const { id: groupId } = req.params;
         const senderId = req.user._id;
 
@@ -141,14 +144,12 @@ export const sendGroupMessage = async (req, res) => {
 
         let imageUrl;
         if (image) {
-            const uploadResponse = await cloudinary.uploader.upload(image);
-            imageUrl = uploadResponse.secure_url;
+            imageUrl = isRemoteUrl(image) ? image : (await cloudinary.uploader.upload(image)).secure_url;
         }
 
         let fileUrl;
         if (file) {
-            const uploadResponse = await cloudinary.uploader.upload(file, { resource_type: "auto" });
-            fileUrl = uploadResponse.secure_url;
+            fileUrl = isRemoteUrl(file) ? file : (await cloudinary.uploader.upload(file, { resource_type: "auto" })).secure_url;
         }
 
         const newMessage = await Message.create({
@@ -159,6 +160,7 @@ export const sendGroupMessage = async (req, res) => {
             fileUrl,
             fileName: fileUrl ? fileName : undefined,
             fileType: fileUrl ? fileType : undefined,
+            replyTo: replyTo || undefined,
             seenBy: [senderId],
         });
 
@@ -195,3 +197,62 @@ export const markGroupMessagesSeen = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 }
+
+// Add, change, or remove the logged-in user's reaction to a message
+export const reactToMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { emoji } = req.body;
+        const userId = req.user._id;
+
+        if (!emoji) {
+            return res.json({ success: false, message: "Emoji is required" });
+        }
+
+        const message = await Message.findById(id);
+        if (!message) {
+            return res.json({ success: false, message: "Message not found" });
+        }
+
+        const existingIndex = message.reactions.findIndex(
+            (r) => r.userId.toString() === userId.toString()
+        );
+
+        if (existingIndex !== -1) {
+            if (message.reactions[existingIndex].emoji === emoji) {
+                message.reactions.splice(existingIndex, 1); // toggle off
+            } else {
+                message.reactions[existingIndex].emoji = emoji; // change reaction
+            }
+        } else {
+            message.reactions.push({ userId, emoji });
+        }
+
+        await message.save();
+
+        const payload = { messageId: id, reactions: message.reactions };
+
+        if (message.groupId) {
+            const group = await Group.findById(message.groupId);
+            if (group) {
+                group.members.forEach((memberId) => {
+                    const socketId = userSocketMap[memberId.toString()];
+                    if (socketId) io.to(socketId).emit("messageReaction", payload);
+                });
+            }
+        } else {
+            const otherId = message.senderId.toString() === userId.toString()
+                ? message.receiverId?.toString()
+                : message.senderId.toString();
+            [otherId, userId.toString()].forEach((pid) => {
+                const socketId = userSocketMap[pid];
+                if (socketId) io.to(socketId).emit("messageReaction", payload);
+            });
+        }
+
+        res.json({ success: true, reactions: message.reactions });
+    } catch (error) {
+        console.log(error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
