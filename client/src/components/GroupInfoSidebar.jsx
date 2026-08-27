@@ -5,6 +5,7 @@ import ImageViewerModal from './ImageViewerModal'
 import ConfirmModal from './ConfirmModal'
 import AddMembersModal from './AddMembersModal'
 import CallHistoryList from './CallHistoryList'
+import MemberInfoPanel from './MemberInfoPanel'
 
 const GroupInfoSidebar = () => {
 
@@ -13,6 +14,7 @@ const GroupInfoSidebar = () => {
     const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
     const [showAddMembers, setShowAddMembers] = useState(false)
     const [leaving, setLeaving] = useState(false)
+    const [openMember, setOpenMember] = useState(null)
 
     if (!selectedGroup || !showUserInfo) return null
 
@@ -104,9 +106,15 @@ const GroupInfoSidebar = () => {
                             <img
                                 src={member.profilePic || assets.avatar_icon}
                                 alt=""
-                                className='w-8 h-8 rounded-full'
+                                onClick={() => setViewerImage(member.profilePic || assets.avatar_icon)}
+                                className='w-8 h-8 rounded-full cursor-pointer'
                             />
-                            <p className='text-sm'>{member.fullName}</p>
+                            <p
+                                onClick={() => setOpenMember(member)}
+                                className='text-sm cursor-pointer hover:underline'
+                            >
+                                {member.fullName}
+                            </p>
                         </div>
                     ))}
                 </div>
@@ -133,6 +141,14 @@ const GroupInfoSidebar = () => {
                     group={selectedGroup}
                     allUsers={users}
                     onClose={() => setShowAddMembers(false)}
+                />
+            )}
+
+            {openMember && (
+                <MemberInfoPanel
+                    member={openMember}
+                    onBack={() => setOpenMember(null)}
+                    onClose={() => setOpenMember(null)}
                 />
             )}
 

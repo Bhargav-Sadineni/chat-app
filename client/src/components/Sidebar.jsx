@@ -78,10 +78,11 @@ import assets from '../assets/assets'
 import { AuthContext } from '../../context/Authcontext'
 import { ChatContext } from '../../context/ChatContext'
 import CreateGroupModal from './CreateGroupModal'
+import CallsListView from './CallsListView'
 
 const Sidebar = () => {
 
-    const { onlineUsers } = useContext(AuthContext)
+    const { onlineUsers, authUser } = useContext(AuthContext)
     const {
         users,
         groups,
@@ -117,6 +118,12 @@ const Sidebar = () => {
         setUnseenMessages((prev) => ({ ...prev, [user._id]: 0 }))
     }
 
+    const handleSelectSelf = () => {
+        setSelectedUser(authUser)
+    }
+
+    const isChatView = sidebarView !== 'groups' && sidebarView !== 'calls'
+
     return (
         <div className={`bg-[#8185B2]/10 h-full p-5 rounded-none md:rounded-r-xl overflow-y-scroll text-white
         ${(selectedUser || selectedGroup || selectedAI) ? "max-md:hidden" : ""}`}>
@@ -132,7 +139,7 @@ const Sidebar = () => {
                     </button>
                 </div>
 
-                {sidebarView !== 'groups' && (
+                {isChatView && (
                     <div className='bg-[#282142] rounded-full flex items-center gap-2 py-3 px-4 mt-5'>
                         <img src={assets.search_icon} alt="Search" className='w-3' />
                         <input
@@ -144,6 +151,8 @@ const Sidebar = () => {
                     </div>
                 )}
             </div>
+
+            {sidebarView === 'calls' && <CallsListView />}
 
             {(sidebarView === 'groups' || sidebarView === 'all') && groups.length > 0 && (
                 <div className='flex flex-col mb-3'>
@@ -173,7 +182,7 @@ const Sidebar = () => {
                 <p className='text-xs text-gray-400 px-2'>No groups yet — tap "+" to create one.</p>
             )}
 
-            {sidebarView !== 'groups' && (
+            {isChatView && (
                 <div className='flex flex-col mb-3'>
                     <div
                         onClick={() => setSelectedAI(true)}
@@ -187,10 +196,21 @@ const Sidebar = () => {
                             <span className='text-neutral-400 text-xs'>Ask me anything</span>
                         </div>
                     </div>
+
+                    <div
+                        onClick={handleSelectSelf}
+                        className={`relative flex items-center gap-2 p-2 pl-4 rounded cursor-pointer max-sm:text-sm
+                        ${selectedUser?._id === authUser?._id && 'bg-[#282142]/50'}`}>
+                        <img src={authUser?.profilePic || assets.avatar_icon} alt="" className='w-[35px] aspect-[1/1] rounded-full' />
+                        <div className='flex flex-col leading-5'>
+                            <p>{authUser?.fullName} (You)</p>
+                            <span className='text-neutral-400 text-xs'>Notes to self</span>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {sidebarView !== 'groups' && (
+            {isChatView && (
                 <div className='flex flex-col'>
                     {filteredUsers.map((user) => (
                         <div onClick={() => handleSelectUser(user)}

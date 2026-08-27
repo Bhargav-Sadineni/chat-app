@@ -132,6 +132,8 @@ import { ChatContext } from '../../context/ChatContext'
 import { AuthContext } from '../../context/Authcontext'
 import { CallContext } from '../../context/CallContext'
 import AIAssistPanel from './AIAssistPanel'
+import EmojiPicker from './EmojiPicker'
+import ImageViewerModal from './ImageViewerModal'
 
 const ChatContainer = () => {
 
@@ -159,23 +161,29 @@ const ChatContainer = () => {
 
     const [text, setText] = useState("")
     const [imagePreview, setImagePreview] = useState(null)
+    const [filePreview, setFilePreview] = useState(null) // { dataUrl, name, type }
     const [sending, setSending] = useState(false)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [showAIPanel, setShowAIPanel] = useState(false)
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+    const [viewerImage, setViewerImage] = useState(null)
     const scrollEnd = useRef()
     const fileInputRef = useRef()
+    const attachInputRef = useRef()
 
     const isGroup = !!selectedGroup
     const isAI = selectedAI
+    const isSelfChat = !isGroup && !isAI && selectedUser?._id === authUser._id
     const activeMessages = isAI ? aiMessages : (isGroup ? groupMessages : messages)
-    const headerName = isAI ? "AI" : (isGroup ? selectedGroup?.name : selectedUser?.fullName)
+    const headerName = isAI ? "AI" : (isGroup ? selectedGroup?.name : (isSelfChat ? `${selectedUser?.fullName} (You)` : selectedUser?.fullName))
     const headerImage = isGroup ? assets.avatar_icon : (selectedUser?.profilePic || assets.avatar_icon)
-    const canCall = callState === 'idle'
+    const canCall = callState === 'idle' && !isSelfChat
 
     useEffect(() => {
         if (selectedUser) getMessages(selectedUser._id)
         if (selectedGroup) getGroupMessages(selectedGroup._id)
         setImagePreview(null)
+        setFilePreview(null)
         setText("")
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedUser, selectedGroup, selectedAI])
@@ -197,12 +205,17 @@ const ChatContainer = () => {
             return
         }
 
-        if (!text.trim() && !imagePreview) return
+        if (!text.trim() && !imagePreview && !filePreview) return
 
         setSending(true)
         const payload = {}
         if (text.trim()) payload.text = text.trim()
         if (imagePreview) payload.image = imagePreview
+        if (filePreview) {
+            payload.file = filePreview.dataUrl
+            payload.fileName = filePreview.name
+            payload.fileType = filePreview.type
+        }
 
         if (isGroup) {
             await sendGroupMessage(payload)
@@ -212,6 +225,7 @@ const ChatContainer = () => {
 
         setText("")
         setImagePreview(null)
+        setFilePreview(null)
         setSending(false)
     }
 
@@ -222,6 +236,20 @@ const ChatContainer = () => {
         reader.onload = () => setImagePreview(reader.result)
         reader.readAsDataURL(file)
         e.target.value = ""
+    }
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = () => setFilePreview({ dataUrl: reader.result, name: file.name, type: file.type })
+        reader.readAsDataURL(file)
+        e.target.value = ""
+    }
+
+    const handleEmojiSelect = (emoji) => {
+        setText((prev) => prev + emoji)
+        setShowEmojiPicker(false)
     }
 
     const handleBack = () => {
@@ -379,7 +407,23 @@ const ChatContainer = () => {
                             <div className={`flex items-end gap-2 justify-end ${msg.senderId !== authUser._id && 'flex-row-reverse'}`}>
                                 <div className={`flex flex-col gap-1 max-w-[75%] sm:max-w-[420px] ${msg.senderId === authUser._id ? 'items-end' : 'items-start'}`}>
                                     {msg.image && (
-                                        <img src={msg.image} alt="" className='max-w-[280px] border border-gray-700 rounded-lg overflow-hidden' />
+                                        <img
+                                            src={msg.image}
+                                            alt=""
+                                            onClick={() => setViewerImage(msg.image)}
+                                            className='max-w-[280px] border border-gray-700 rounded-lg overflow-hidden cursor-pointer'
+                                        />
+                                    )}
+                                    {msg.fileUrl && (
+                                        <a
+                                            href={msg.fileUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className='flex items-center gap-2 p-2 rounded-lg bg-white/10 text-white text-xs max-w-[220px]'
+                                        >
+                                            <span className='text-lg'>📄</span>
+                                            <span className='truncate'>{msg.fileName || "File"}</span>
+                                        </a>
                                     )}
                                     {msg.text && (
                                         <p className={`p-3 max-w-full md:text-sm font-light rounded-lg break-words whitespace-pre-wrap bg-violet-500/30 text-white
@@ -420,13 +464,41 @@ const ChatContainer = () => {
                     </div>
                 )}
 
+                {!isAI && filePreview && (
+                    <div className='flex items-center gap-3 bg-gray-100/10 rounded-lg p-2 mx-1'>
+                        <span className='text-2xl'>📄</span>
+                        <p className='text-xs text-gray-300 flex-1 truncate'>{filePreview.name}</p>
+                        <button
+                            type="button"
+                            onClick={() => setFilePreview(null)}
+                            aria-label="Remove file"
+                            className='w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 text-white text-lg leading-none'
+                        >
+                            &times;
+                        </button>
+                    </div>
+                )}
+
                 <div className='flex items-center gap-3'>
-                    <div className='flex-1 flex items-center bg-gray-100/12 px-3 rounded-full'>
+                    <div className='flex-1 flex items-center bg-gray-100/12 px-3 rounded-full relative'>
+                        {!isAI && (
+                            <button
+                                type="button"
+                                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                                className='mr-2 text-lg'
+                            >
+                                😊
+                            </button>
+                        )}
+                        {!isAI && showEmojiPicker && (
+                            <EmojiPicker onSelect={handleEmojiSelect} onClose={() => setShowEmojiPicker(false)} />
+                        )}
+
                         <input
                             type="text"
                             value={text}
                             onChange={(e) => setText(e.target.value)}
-                            placeholder={isAI ? "Ask AI anything..." : (imagePreview ? "Add a caption..." : "Send a message")}
+                            placeholder={isAI ? "Ask AI anything..." : ((imagePreview || filePreview) ? "Add a caption..." : "Send a message")}
                             className='flex-1 text-sm p-3 border-none rounded-lg outline-none text-white placeholder-gray-400'
                         />
                         {!isAI && (
@@ -439,21 +511,36 @@ const ChatContainer = () => {
                                     hidden
                                     onChange={handleImageSelect}
                                 />
-                                <label htmlFor='image'>
+                                <label htmlFor='image' title="Send image">
                                     <img
                                         src={assets.gallery_icon}
                                         alt=""
                                         className='w-5 mr-2 cursor-pointer'
                                     />
                                 </label>
+
+                                <input
+                                    ref={attachInputRef}
+                                    type="file"
+                                    id='attach-file'
+                                    hidden
+                                    onChange={handleFileSelect}
+                                />
+                                <label htmlFor='attach-file' title="Send file" className='mr-2 cursor-pointer text-lg'>
+                                    📎
+                                </label>
                             </>
                         )}
                     </div>
-                    <button type='submit' disabled={isAI ? (aiLoading || !text.trim()) : (sending || (!text.trim() && !imagePreview))}>
+                    <button type='submit' disabled={isAI ? (aiLoading || !text.trim()) : (sending || (!text.trim() && !imagePreview && !filePreview))}>
                         <img src={assets.send_button} alt="" className='w-7 cursor-pointer disabled:opacity-40' />
                     </button>
                 </div>
             </form>
+
+            {viewerImage && (
+                <ImageViewerModal src={viewerImage} onClose={() => setViewerImage(null)} />
+            )}
         </div>
     )
 }

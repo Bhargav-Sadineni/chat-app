@@ -13,7 +13,6 @@ export const getUsersForSidebar = async (req, res)=>{
             _id: { $ne: userId }
         }).select("-password");
 
-        // Count number of messages not seen
         const unseenMessages = {};
 
         const promises = filteredUsers.map(async (user)=>{
@@ -73,7 +72,7 @@ export const markMessageAsSeen = async (req, res)=>{
 // Send message to selected user
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image } = req.body;
+        const { text, image, file, fileName, fileType } = req.body;
 
         const receiverId = req.params.id;
         const senderId = req.user._id;
@@ -84,14 +83,22 @@ export const sendMessage = async (req, res) => {
             imageUrl = uploadResponse.secure_url;
         }
 
+        let fileUrl;
+        if (file) {
+            const uploadResponse = await cloudinary.uploader.upload(file, { resource_type: "auto" });
+            fileUrl = uploadResponse.secure_url;
+        }
+
         const newMessage = await Message.create({
             senderId,
             receiverId,
             text,
-            image: imageUrl
+            image: imageUrl,
+            fileUrl,
+            fileName: fileUrl ? fileName : undefined,
+            fileType: fileUrl ? fileType : undefined,
         });
 
-        // Emit the new message to the receiver's socket
         const receiverSocketId = userSocketMap[receiverId];
 
         if (receiverSocketId) {
@@ -123,7 +130,7 @@ export const getGroupMessages = async (req, res) => {
 // Send a message to a group
 export const sendGroupMessage = async (req, res) => {
     try {
-        const { text, image } = req.body;
+        const { text, image, file, fileName, fileType } = req.body;
         const { id: groupId } = req.params;
         const senderId = req.user._id;
 
@@ -138,11 +145,20 @@ export const sendGroupMessage = async (req, res) => {
             imageUrl = uploadResponse.secure_url;
         }
 
+        let fileUrl;
+        if (file) {
+            const uploadResponse = await cloudinary.uploader.upload(file, { resource_type: "auto" });
+            fileUrl = uploadResponse.secure_url;
+        }
+
         const newMessage = await Message.create({
             senderId,
             groupId,
             text,
             image: imageUrl,
+            fileUrl,
+            fileName: fileUrl ? fileName : undefined,
+            fileType: fileUrl ? fileType : undefined,
             seenBy: [senderId],
         });
 

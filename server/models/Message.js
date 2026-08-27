@@ -20,11 +20,19 @@ const messageSchema = new mongoose.Schema({
     image: {
         type: String,
     },
+    fileUrl: {
+        type: String,
+    },
+    fileName: {
+        type: String,
+    },
+    fileType: {
+        type: String,
+    },
     seen: {
         type: Boolean,
         default: false,
     },
-    // Tracks which group members have seen this message (group chats only)
     seenBy: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
