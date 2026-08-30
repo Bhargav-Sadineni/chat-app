@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { AuthContext } from "./Authcontext";
+import { perfStats } from "../src/lib/perfStats";
 
 export const CallContext = createContext();
 
@@ -24,6 +25,7 @@ export const CallProvider = ({ children }) => {
     const currentCallRef = useRef(null);
     const incomingCallRef = useRef(null);
     const pendingCandidatesRef = useRef({}); // userId -> [candidate,...]
+    const callSetupStartRef = useRef(null); // perf: timestamp when this call started dialing/accepting
 
     useEffect(() => { currentCallRef.current = currentCall; }, [currentCall]);
     useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
@@ -55,6 +57,7 @@ export const CallProvider = ({ children }) => {
         setMuted(false);
         setCameraOff(false);
         pendingCandidatesRef.current = {};
+        callSetupStartRef.current = null;
     };
 
     const getMedia = async (type) => {
@@ -77,6 +80,11 @@ export const CallProvider = ({ children }) => {
         }
 
         pc.ontrack = (event) => {
+            // perf: time from dial/accept to first remote media arriving = call setup time
+            if (callSetupStartRef.current) {
+                perfStats.record("call-setup-time", Date.now() - callSetupStartRef.current);
+                callSetupStartRef.current = null; // only record once per call
+            }
             setRemoteStreams((prev) => ({ ...prev, [otherUserId]: event.streams[0] }));
         };
 
@@ -115,6 +123,8 @@ export const CallProvider = ({ children }) => {
             await getMedia(type);
             const callId = `${Date.now()}-${authUser._id}`;
 
+            callSetupStartRef.current = Date.now();
+
             setCurrentCall({
                 callId,
                 type,
@@ -143,6 +153,9 @@ export const CallProvider = ({ children }) => {
         if (!call) return;
         try {
             await getMedia(call.type);
+
+            callSetupStartRef.current = Date.now();
+
             setCurrentCall({
                 callId: call.callId,
                 type: call.type,

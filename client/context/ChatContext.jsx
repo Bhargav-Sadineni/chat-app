@@ -115,6 +115,7 @@ export const ChatProvider = ({ children })=>{
 import { createContext, useContext, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { AuthContext } from "./Authcontext";
+import { perfStats } from "../src/lib/perfStats";
 
 export const ChatContext = createContext();
 
@@ -202,7 +203,7 @@ export const ChatProvider = ({ children }) => {
         try {
             const { data } = await axios.post(
                 `/api/messages/send/${selectedUser._id}`,
-                messageData
+                { ...messageData, clientSentAt: Date.now() }
             );
             if (data.success) {
                 setMessages((prev) => [...prev, data.newMessage]);
@@ -230,7 +231,7 @@ export const ChatProvider = ({ children }) => {
         try {
             const { data } = await axios.post(
                 `/api/messages/send-group/${selectedGroup._id}`,
-                messageData
+                { ...messageData, clientSentAt: Date.now() }
             );
             if (data.success) {
                 setGroupMessages((prev) => [...prev, data.newMessage]);
@@ -290,11 +291,13 @@ export const ChatProvider = ({ children }) => {
         const userTurn = { role: "user", text };
         setAiMessages((prev) => [...prev, userTurn]);
         setAiLoading(true);
+        const startedAt = Date.now();
         try {
             const { data } = await axios.post("/api/ai/chat", {
                 message: text,
                 history: [...aiMessages, userTurn],
             }, { timeout: 50000 });
+            perfStats.record("ai-response-time", Date.now() - startedAt);
             if (data.success) {
                 setAiMessages((prev) => [...prev, { role: "ai", text: data.reply }]);
             } else {
@@ -313,12 +316,14 @@ export const ChatProvider = ({ children }) => {
     };
 
     const askAIAbout = async (question, { userId, groupId } = {}) => {
+        const startedAt = Date.now();
         try {
             const { data } = await axios.post("/api/ai/chat", {
                 message: question,
                 userId,
                 groupId,
             }, { timeout: 50000 });
+            perfStats.record("ai-response-time", Date.now() - startedAt);
             if (data.success) return data.reply;
             toast.error(data.message);
             return null;
@@ -404,6 +409,10 @@ export const ChatProvider = ({ children }) => {
         if (!socket) return;
 
         socket.on("newMessage", (newMessage) => {
+            if (newMessage.clientSentAt) {
+                perfStats.record("message-delivery-latency", Date.now() - newMessage.clientSentAt);
+            }
+
             const isCurrentChat = selectedUser && newMessage.senderId === selectedUser._id;
 
             if (isCurrentChat) {
@@ -426,6 +435,10 @@ export const ChatProvider = ({ children }) => {
         });
 
         socket.on("newGroupMessage", (newMessage) => {
+            if (newMessage.clientSentAt) {
+                perfStats.record("group-message-delivery-latency", Date.now() - newMessage.clientSentAt);
+            }
+
             const isCurrentGroup = selectedGroup && newMessage.groupId === selectedGroup._id;
 
             if (isCurrentGroup) {

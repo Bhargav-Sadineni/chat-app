@@ -76,7 +76,7 @@ export const markMessageAsSeen = async (req, res)=>{
 // Send message to selected user
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image, file, fileName, fileType, replyTo } = req.body;
+        const { text, image, file, fileName, fileType, replyTo, clientSentAt } = req.body;
 
         const receiverId = req.params.id;
         const senderId = req.user._id;
@@ -105,7 +105,7 @@ export const sendMessage = async (req, res) => {
         const receiverSocketId = userSocketMap[receiverId];
 
         if (receiverSocketId) {
-            io.to(receiverSocketId).emit("newMessage", newMessage);
+            io.to(receiverSocketId).emit("newMessage", { ...newMessage.toObject(), clientSentAt });
         }
 
         res.json({ success: true, newMessage });
@@ -133,7 +133,7 @@ export const getGroupMessages = async (req, res) => {
 // Send a message to a group
 export const sendGroupMessage = async (req, res) => {
     try {
-        const { text, image, file, fileName, fileType, replyTo } = req.body;
+        const { text, image, file, fileName, fileType, replyTo, clientSentAt } = req.body;
         const { id: groupId } = req.params;
         const senderId = req.user._id;
 
@@ -168,7 +168,7 @@ export const sendGroupMessage = async (req, res) => {
             if (memberId.toString() === senderId.toString()) return;
             const socketId = userSocketMap[memberId.toString()];
             if (socketId) {
-                io.to(socketId).emit("newGroupMessage", newMessage);
+                io.to(socketId).emit("newGroupMessage", { ...newMessage.toObject(), clientSentAt });
             }
         });
 
